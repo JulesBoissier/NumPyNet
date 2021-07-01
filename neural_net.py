@@ -1,22 +1,13 @@
 import math
 import pickle
+import copy
+
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
 from matplotlib import pyplot as plt
-import copy
+from mnist_utils import *
 
-def relu_actfunc(x):
-        return max(x,0)
-
-def relu_deriv(x):
-    if x <= 0:
-        return 0
-    else:
-        return 1
-
-def exponantial(x):
-    return math.exp(x)
 
 
 class NeuralNetwork:
@@ -26,6 +17,7 @@ class NeuralNetwork:
     def __init__(
         self,
         architecture : list = [784,128,10],
+        activation_function : str = 'relu'
         ):
 
         if isinstance(architecture,list) == False or len(architecture) < 2 or 0 in architecture:     
@@ -39,7 +31,36 @@ class NeuralNetwork:
             #He Weight Initialization
             self.weights.append(np.random.normal(0,np.sqrt(2/self.architecture[i]),(self.architecture[i+1],self.architecture[i])))
             self.bias.append(np.zeros((self.architecture[i+1],1)))
+
+        self._assign_actfunc(activation_function)
         
+
+    def _assign_actfunc(
+        self,
+        name : str
+        ) -> None:
+        """
+        Assigns a specific activation function to be used by the neural network.
+
+        Parameters
+        ----------
+        name: A string denoting the activation function to be used.
+              Valid options : 'relu', 'leaky_relu','hyperbolic_tangent','elu'
+        """
+        self.activation_name = name
+        if name == 'relu':
+            self.activation_function = relu
+            self.activation_derivative = relu_deriv
+        elif name == 'leaky_relu':
+            self.activation_function = leaky_relu
+            self.activation_derivative = leaky_relu_deriv
+        elif name == 'hyperbolic_tangent':
+            self.activation_function = hyperbolic_tangent
+            self.activation_derivative = hyperbolic_tangent_deriv
+        elif name == 'elu':
+            self.activation_function = elu
+            self.activation_derivative = elu_deriv
+
     def _forward_prop(
         self,
         element : np.ndarray,
@@ -58,7 +79,7 @@ class NeuralNetwork:
         a_list: List of vertical arrays describing neuron's activated states for each layer.
         """
 
-        act_function = np.vectorize(relu_actfunc)
+        act_function = np.vectorize(self.activation_function)
         expon = np.vectorize(exponantial)
         z_list = []
         a_list = []
@@ -99,7 +120,7 @@ class NeuralNetwork:
         softmax_loss: A float denoting the softmax loss for this element's prediction.
         """
 
-        act_derivative = np.vectorize(relu_deriv)
+        act_derivative = np.vectorize(self.activation_derivative)
         label = label.reshape(label.shape[0],-1)
         delta_list = []
         delta = (softmax_prediction - label)
@@ -291,7 +312,7 @@ class NeuralNetwork:
                 validation_epoch_loss = self._compute_validation_loss(valid_x,valid_y)
                 validation_loss_list.append(validation_epoch_loss)
         
-        self.temperature = self.confidence_calibration(valid_x, valid_y)
+        self.temperature = self._confidence_calibration(valid_x, valid_y)
 
         if plot_loss:
             self._plot_loss(training_loss_list, validation_loss_list)
@@ -305,7 +326,7 @@ class NeuralNetwork:
         ):
         """
         Computes the gradient of the NLL (cross entropy loss) function for the softmax of (z/temperature) in which z is the 
-        logit vector. Gradient will then be used in function confidence_calibration for gradient descent to optimize w.r.t Z.
+        logit vector. Gradient will then be used in function _confidence_calibration for gradient descent to optimize w.r.t Z.
 
         Parameters
         ----------
@@ -332,7 +353,7 @@ class NeuralNetwork:
 
         return gradient
 
-    def confidence_calibration(
+    def _confidence_calibration(
         self, 
         valid_x : np.ndarray,
         valid_y : np.ndarray,
@@ -342,7 +363,7 @@ class NeuralNetwork:
         """
         Determines a degree of calibration for the prediction confidence probability through a gradient descent algorithm.
         Without this, network is overconfident in predictions, see 'On Calibration of Modern Neural Networks',
-        Chuan Guo et al. (3 August 2017)
+        Chuan Guo et al. 2017.
 
         Parameters
         ----------
@@ -405,7 +426,8 @@ class NeuralNetwork:
         self,
         test_x : np.ndarray,
         test_y : np.ndarray,
-        ) -> None: 
+        display_table : bool = True,
+        ) -> float: 
         """
         Evaluates the accuracy of the neural network on a batch of test elements.
         Yields several metrics to evaluate the performance, including the overall accuracy, TP, TN, FP, FN for each class
@@ -415,44 +437,55 @@ class NeuralNetwork:
         ----------
         test_x: Array containing test elements. 
         test_y: Array containing one hot encoded labels matching test elements.
+
+        Returns
+        ----------
+        The overall accuracy of the neural network on the test set
         """
         predictions, probabilities = self.predict(test_x)
         count_errors = np.count_nonzero(np.transpose(predictions)-test_y)
-        print('The  overall accuracy is', round(1 - count_errors/test_y.shape[0],3),'.')
+        
 
-        unique_classes = np.unique(test_y)
-        test_y = test_y.reshape(test_y.shape[0],-1)
-        zipped_arrays = np.concatenate((test_y,predictions),axis = 1)
+        if display_table:
 
-        analysis_table = [[unique_class] for unique_class in unique_classes]
+            print('The  overall accuracy is', round(1 - count_errors/test_y.shape[0],3),'.')
 
-        #Analysing each class separatly:
-        for idx, unique_class in enumerate(unique_classes):
-            class_list = []
-            non_class_list = []
-            for i in range(zipped_arrays.shape[0]):
-                if zipped_arrays[i][0] == unique_class:
-                    class_list.append(zipped_arrays[i][1])
-                else:
-                    non_class_list.append(zipped_arrays[i][1])
+            unique_classes = np.unique(test_y)
+            test_y = test_y.reshape(test_y.shape[0],-1)
+            zipped_arrays = np.concatenate((test_y,predictions),axis = 1)
 
-            tp = np.count_nonzero(class_list == unique_class)
-            fn = len(class_list) - tp
-            fp = np.count_nonzero(non_class_list == unique_class)
-            tn = len(non_class_list) - fn
-            try:
-                precision = round(tp/(tp + fp),3)
-                recall = round(tp/(tp + fn),3)
-                f1_score = round(2 * (precision * recall) / (precision + recall),3)
-            except ZeroDivisionError:
-                precision = 'N/A'
-                recall = 'N/A'
-                f1_score = 'N/A'
+            analysis_table = [[unique_class] for unique_class in unique_classes]
 
-            analysis_table[idx].extend([precision, recall, f1_score])
+            #Analysing each class separatly:
+            for idx, unique_class in enumerate(unique_classes):
+                class_list = []
+                non_class_list = []
+                for i in range(zipped_arrays.shape[0]):
+                    if zipped_arrays[i][0] == unique_class:
+                        class_list.append(zipped_arrays[i][1])
+                    else:
+                        non_class_list.append(zipped_arrays[i][1])
 
-        print(tabulate(analysis_table, headers=['Class','Precision', 'Recall','F1 Score']))
+                tp = np.count_nonzero(class_list == unique_class)
+                fn = len(class_list) - tp
+                fp = np.count_nonzero(non_class_list == unique_class)
+                tn = len(non_class_list) - fn
+                
+                try:
+                    precision = round(tp/(tp + fp),3)
+                    recall = round(tp/(tp + fn),3)
+                    f1_score = round(2 * (precision * recall) / (precision + recall),3)
+                except ZeroDivisionError:
+                    precision = 'N/A'
+                    recall = 'N/A'
+                    f1_score = 'N/A'
 
+                analysis_table[idx].extend([precision, recall, f1_score])
+
+            print(tabulate(analysis_table, headers=['Class','Precision', 'Recall','F1 Score']))
+        
+        return 1 - count_errors/test_y.shape[0]
+    
     def save_model(
         self,
         name :str = 'new_model',
@@ -462,6 +495,7 @@ class NeuralNetwork:
         """
         model_dict = {}
         model_dict['Temperature'] = self.temperature
+        model_dict['Activation'] = self.activation_name
         for idx, element in enumerate(self.bias):
             model_dict[f'Bias{idx}'] = pd.DataFrame(data=element)
         for idx, element in enumerate(self.weights):
@@ -499,9 +533,12 @@ class NeuralNetwork:
                 self.weights.append(value)
             elif layer_name ==  'Temperature':
                 self.temperature = parameter
+            elif layer_name == 'Activation':
+                activation_function_name = parameter
 
         for weight in self.weights:
             self.architecture.append(weight.shape[1])
         self.architecture.append(self.weights[-1].shape[0])
 
+        self._assign_actfunc(activation_function_name)
 
