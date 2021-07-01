@@ -117,7 +117,8 @@ class Board:
         self.data = np.zeros((self.num_cells,self.num_cells))
         self.grid()
 
-    def buttons(self,
+    def buttons(
+        self,
         x : float,
         y : float
         ) -> bool:
