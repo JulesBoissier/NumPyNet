@@ -1,5 +1,9 @@
 import pickle, gzip, numpy as np
+import math
+
+
 import pandas as pd
+
 
     
 def read_pickle_data(file_name): 
@@ -43,3 +47,45 @@ def one_hot_encode(labels):
     for i in range(labels.shape[0]):
         encoded_labels[i][labels[i]] = 1
     return encoded_labels
+
+def relu(x):
+        return max(x,0)
+
+def relu_deriv(x):
+    if x <= 0:
+        return 0
+    else:
+        return 1
+
+def leaky_relu(x,alpha = 0.01):
+    if x < 0:
+        return alpha*x
+    else:
+        return x
+
+def leaky_relu_deriv(x,alpha = 0.01):
+    if x < 0:
+        return alpha
+    else:
+        return 1
+
+def hyperbolic_tangent(x):
+    return (math.exp(x) - math.exp(-x)) / (math.exp(x) + math.exp(-x)) 
+
+def hyperbolic_tangent_deriv(x):
+    return 1 - hyperbolic_tangent(x)**2
+
+def elu(x,alpha = 0.01):
+    if x <= 0:
+        return alpha * (math.exp(x) - 1)
+    else:
+        return x
+
+def elu_deriv(x,alpha = 0.01):
+    if x <= 0:
+        return alpha * math.exp(x)
+    else:
+        return 1
+
+def exponantial(x):
+    return math.exp(x)
