@@ -27,7 +27,7 @@ This project comes with a MNIST dataset as well as a previously trained model wh
 
 As a means to showcase the ability of the aforementioned, using a pre-trained model on the MNIST dataset, this pygame app allows the user to draw a digit and have the app attempt to classify it. The results are fairly satisfactory, helped by the fact that the script attempts to preprocess the hand-drawn inputs in much the same way as the original MNIST dataset was. Namely, the input data is cropped, centered and grey-scaled and the padded by a box size of four.
 
-Additionally, the app outputs a confidence probability in its prediction, for which the value is calibrated by the softmax temperature scaling for which the computation is  detailed below.
+Additionally, the app outputs a confidence probability in its prediction, for which the value is calibrated by the softmax temperature scaling [1].
 
 ---
 
@@ -54,18 +54,6 @@ It should be noted that the network's input and output layer will be reshaped if
 
 Creates a new fully-connected neural network and loads its architecture, weights and biases from a saved model in the project folder. Also gives the option to evaluate the networks performance on a test set.
  
-
-
-
-## Basic Underlying Theory
-
-As mentionned in the project description, no groundbreaking theory will be found in this project. I would however like to detail a few blips in the theory that I had not heard of before researching for this particular project.
-
-In asking my neural networks to print the probability of their predictions as an output to the digit classifying app when the user submits a hand-drawn digit I came to the realization that these models were atrociously overconfident. This was surprising as I was under the impression that the softmax would do a good job at estimating a degree of confidence, and seemed to do so on the MNIST dataset.
-
-However, thanks to the app, I was able to do more test with non-MNIST inputs, and while the predictions for digits were mostly correct, it would also classifiy non-digits inputs, such as almost empty or completely black images, with a very high degree of confidence (+ 99%).
-  
-Thankfully, a paper was written on this very subject [1], giving several strategies for calibrating neural networks. The _confidence_calibration function in the NeuralNetwork class therefore optimizes temperature coefficient through gradient descent on the cross-entropy loss of the validation set. Afterwards, the multi-class output is computed as the softmax of the network output over the temperature, rather than just the softmax of the network output. This effectively dampens the softmax function and skews the confidence of the network down.
 
 
 ## References
